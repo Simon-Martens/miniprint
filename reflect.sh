@@ -29,20 +29,48 @@ generate_ascii_art() {
     
     claude -p "Create art. Create an abstract, geometric ASCII visualization of the term \"$term\". A minimalsitic effect is also allowed if the subject matter fits, or the surprise is right. Creativity is key, be original. 
 - Palette (ONLY use these characters):
-   !\"#\$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_\`abcdefghijklmnopqrstuvwxyz{|}~
-   ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═
-   ╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αβΓπΣσμτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■
-- Prefer -><!\"#\()*-./:;=@_\|}~░▒▓│┤┐└┴┬├─┼┘┌█▄▌▐▀∞≡±≥≤⌠⌡∙·■ for drawing shapes and lines. Generally prefer the fist 128 characters of the ASCII table.
+   !\"#\$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_\`abcdefghijklmnopqrstuvwxyz{|}~ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αβΓπΣσμτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ 
+- Prefer -><!\"#\()*-./:;=@_\|}~░▒▓│┤┐└┴┬├─┼┘┌█▄▌▐▀∞≡±≥≤⌠⌡∙·■ for drawing shapes and lines. Generally prefer the fist 128 characters of the ASCII table. Border: Avoid borders unless absolutely essential for the concept (e.g., only for terms like \"boundary\", \"frame\", \"containment\"). Arrows: Use -> <- only. No triangular arrows (▲▼◄►) - they're not in the character set.
 - As an additional prerequisite the printed ASCII art should include the name of the term somehow inside the graphic.
 - $width_emphasis, height max. 20 lines
-	- Just output the ASCII art, nothing else
 -  SHAPE MIRRORS CONCEPT, MAKE THE SHAPE EMBODY THE TERMS ESSENCE, ITS MEANING. Examples:
-* \"explosion\" → radiating lines from center with 
-* \"hierarchy\" → pyramid structure with ═ ║ patterns
-* \"flow\" → curved directional lines with patterns
-- Border: Avoid borders unless absolutely essential for the concept (e.g., only for terms like \"boundary\", \"frame\", \"containment\").
-- Arrows: Use -> <- only. No triangular arrows (▲▼◄►) - they're not in the character set.
-- You can embed a small 2-5 line poem that generally rhymes about the subject matter, but it is not required."
+// STACK //
+  ┌─S─T─A─C─K─┐
+  │▓▓▓▓▓▓▓▓▓│ <─ top
+  ├─────────┤
+  │▒▒▒▒▒▒▒▒▒│
+  ├─────────┤
+  │░░░░░░░░░│
+  ├─────────┤
+  │█████████│ <─ bottom
+  └─────────┘
+	// COSCIOUSNESS //
+      . • *
+      / C O N \
+     | S C I O U S |
+     | N E S S   |
+      \         /
+       ' . • * '
+       / | \ / | \
+      /  |  V  |  \
+     ( Thought's spark, a inner light, )
+     ( Perceptions woven, day and night. )
+     ( A boundless realm, where self takes flight, )
+     ( And brings the world into our sight. )
+
+// QUEUE //
+>─Q──U──E──U──E─>
+  │             │
+ front        rear
+
+// ALGORITHM //
+A─┌>─L──G─┐
+  │   O   │
+  ├─R──I──T──┐
+  │   T   H  │
+  └──>M───<──┘
+- You can embed a small 2-6 line poem that generally rhymes about the subject matter, but it is not required.
+- Just output the ASCII art, nothing else"
 }
 
 if [ -z "$term" ]; then
