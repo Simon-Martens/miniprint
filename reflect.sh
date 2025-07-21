@@ -1,5 +1,21 @@
 #!/bin/bash
 
+# Parse command line arguments
+NON_INTERACTIVE=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --non-interactive)
+            NON_INTERACTIVE=true
+            shift
+            ;;
+        *)
+            term="$1"
+            shift
+            ;;
+    esac
+done
+
 # Function to generate ASCII art with Claude
 generate_ascii_art() {
     local term="$1"
@@ -16,20 +32,20 @@ generate_ascii_art() {
    !\"#\$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_\`abcdefghijklmnopqrstuvwxyz{|}~
    ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═
    ╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αβΓπΣσμτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■
+- Prefer -><!\"#\()*-./:;=@_\|}~░▒▓│┤┐└┴┬├─┼┘┌█▄▌▐▀∞≡±≥≤⌠⌡∙·■ for drawing shapes and lines.
 - As an additional prerequisite the printed ASCII art should include the name of the term somehow inside the graphic.
-- Output limitations:
 - $width_emphasis, height max. 20 lines
 	- Just output the ASCII art, nothing else
-	- Shape mirrors concept - make the visual form embody the word's essence.
-- Examples:
+-  SHAPE MIRRORS CONCEPT, MAKE THE SHAPE EMBODY THE TERMS ESSENCE, ITS MEANING. Examples:
 * \"explosion\" → radiating lines from center with 
 * \"hierarchy\" → pyramid structure with ═ ║ patterns
 * \"flow\" → curved directional lines with patterns
 - Border: Avoid borders unless absolutely essential for the concept (e.g., only for terms like \"boundary\", \"frame\", \"containment\").
+- Arrows: Use -> <- only. No triangular arrows (▲▼◄►) - they're not in the character set.
 - You can embed a small 2-5 line poem that generally rhymes about the subject matter, but it is not required."
 }
 
-if [ $# -eq 0 ]; then
+if [ -z "$term" ]; then
     # Get Claude to choose a random term
     timestamp=$(date +%s%N)
     random_seed=$((RANDOM + timestamp % 1000000))
@@ -44,7 +60,7 @@ if [ $# -eq 0 ]; then
         field_balance_prompt="Look at previous terms and vary the field - avoid repeating from the same domain too often. "
     fi
     
-    term=$(claude -p "Random seed: $random_seed. ${exclusion_prompt}${field_balance_prompt}Pick ONE obscure/niche term from: mathematics (topology, category theory, algebraic geometry), logic (modal logic, proof theory, type systems), theoretical physics (quantum field theory, general relativity, statistical mechanics), computer science (lambda calculus, complexity theory, formal verification, programming terms, patterns, computer terminoly, historic or contemporary), or philosophy of science (epistemology, falsifiability, paradigms). Choose something DIFFERENT each time. Be maximally random. RETURN ONE WORD ONLY.")
+    term=$(claude -p "Random seed: $random_seed. ${exclusion_prompt}${field_balance_prompt}Pick ONE obscure/niche term from: mathematics (topology, category theory, algebraic geometry), logic (modal logic, proof theory, type systems), theoretical physics (quantum field theory, general relativity, statistical mechanics, particles), computer science (lambda calculus, complexity theory, formal verification, programming terms, patterns, computer terminology, historic or contemporary), philosophy of science (epistemology, falsifiability, paradigms), or abstract concepts of philosophy and philosophy of the mind (identity, projection, emergence, recursion, transformation, boundary, flow, structure, self, future, decisive, own, becoming, void, essence). Choose something DIFFERENT each time. Be maximally random. RETURN ONE TERM ONLY.")
     
     # Save the chosen term to history
     if [ -f "$history_file" ]; then
@@ -53,9 +69,9 @@ if [ $# -eq 0 ]; then
         echo "$term, " > "$history_file"
     fi
     
-    gum style --foreground="#00ff00" --bold "🎲 Selected random term: $term"
-else
-    term="$1"
+    if [ "$NON_INTERACTIVE" != true ]; then
+        gum style --foreground="#00ff00" --bold "🎲 Selected random term: $term"
+    fi
 fi
 
 # Generate ASCII art with retry logic
@@ -77,11 +93,15 @@ while [ $attempt -le $max_attempts ]; do
     max_line_length=$(echo "$art_output" | wc -L)
     
     if [ "$max_line_length" -le 62 ]; then
-        gum style --foreground="#00ff00" --bold "✅ Generated ASCII art for term: $term (attempt $attempt)"
-        gum style --border="rounded" --padding="1" --margin="1" "$art_output"
+        if [ "$NON_INTERACTIVE" != true ]; then
+            gum style --foreground="#00ff00" --bold "✅ Generated ASCII art for term: $term (attempt $attempt)"
+            gum style --border="rounded" --padding="1" --margin="1" "$art_output"
+        fi
         break
     else
-        gum style --foreground="#ff9900" "⚠️  Attempt $attempt: Line too long ($max_line_length chars), retrying with stricter constraint..."
+        if [ "$NON_INTERACTIVE" != true ]; then
+            gum style --foreground="#ff9900" "⚠️  Attempt $attempt: Line too long ($max_line_length chars), retrying with stricter constraint..."
+        fi
         attempt=$((attempt + 1))
     fi
 done
@@ -94,7 +114,8 @@ fi
 # Convert UTF-8 to PC437 encoding
 convert_to_pc437() {
     local input="$1"
-    # Use sed to convert UTF-8 characters to PC437 equivalents
+    # Convert only non-ASCII Unicode characters to PC437 equivalents
+    # Leave basic ASCII (including / and \) completely untouched
     echo "$input" | sed \
         -e 's/Ç/\o200/g' -e 's/ü/\o201/g' -e 's/é/\o202/g' -e 's/â/\o203/g' -e 's/ä/\o204/g' -e 's/à/\o205/g' -e 's/å/\o206/g' -e 's/ç/\o207/g' \
         -e 's/ê/\o210/g' -e 's/ë/\o211/g' -e 's/è/\o212/g' -e 's/ï/\o213/g' -e 's/î/\o214/g' -e 's/ì/\o215/g' -e 's/Ä/\o216/g' -e 's/Å/\o217/g' \
@@ -114,7 +135,17 @@ convert_to_pc437() {
         -e 's/°/\o370/g' -e 's/∙/\o371/g' -e 's/·/\o372/g' -e 's/√/\o373/g' -e 's/ⁿ/\o374/g' -e 's/²/\o375/g' -e 's/■/\o376/g'
 }
 
-art_output=$(convert_to_pc437 "$art_output")
+# Create /tmp/reflect directory if it doesn't exist
+mkdir -p /tmp/reflect
+
+# Save original output to file (without PC437 conversion for display)
+echo "$art_output" > "/tmp/reflect/${term}.txt"
+if [ "$NON_INTERACTIVE" != true ]; then
+    gum style --foreground="#0088ff" "💾 Saved ASCII art to /tmp/reflect/${term}.txt"
+fi
+
+# Convert to PC437 for printer only
+art_output_pc437=$(convert_to_pc437 "$art_output")
 
 # Print the ASCII art to thermal printer
 lines=3
@@ -123,33 +154,61 @@ lines=3
 esc='\x1b'
 gs='\x1d'
 
-# Wait for user input
-if [ -e /dev/usb/lp0 ]; then
-    gum style --foreground="#00aaff" "Press ENTER to print to thermal printer, or ESC to abort:"
-else
-    gum style --foreground="#ffaa00" "📺 No printer found - Press any key to exit:"
-fi
-
-# Read single keypress
-read -rsn1 key
-
-# Handle keypress
-if [ -e /dev/usb/lp0 ]; then
-    if [ "$key" = "" ]; then  # Enter key
-        gum style --foreground="#00ccff" --bold "🖨️  Printing to thermal printer..."
+# Handle interactive vs non-interactive modes
+if [ "$NON_INTERACTIVE" = true ]; then
+    # Auto-print if printer is available in non-interactive mode
+    if [ -e /dev/usb/lp0 ]; then
         {
             printf "${esc}t\x00"      # Select PC437 character table
             printf "${esc}M\x01"      # Switch to Font B
-            printf "%s\n" "$art_output"
+            printf "%s\n" "$art_output_pc437"
             printf "${esc}d\x$(printf '%02x' $lines)"  # Feed lines
             printf "${gs}VA\x00"     # Cut paper
         } > /dev/usb/lp0
-        gum style --foreground="#00ff00" "✅ Printed to thermal printer"
-    elif [ "$key" = $'\e' ]; then  # ESC key
-        gum style --foreground="#ff9900" "🚫 Printing aborted"
-    else
-        gum style --foreground="#ff9900" "🚫 Invalid key - printing aborted"
     fi
+    
+    # Mystic output: term, space, then ASCII art
+    clear
+    echo
+    echo
+    gum style --foreground="#666666" --align="center" "$term"
+    echo
+    echo
+    echo
+    echo "$art_output"
+    echo
+    echo
+    gum style --foreground="#333333" --align="center" "press any key to close"
+    read -rsn1
 else
-    gum style --foreground="#00ff00" "👋 Goodbye!"
+    # Wait for user input
+    if [ -e /dev/usb/lp0 ]; then
+        gum style --foreground="#00aaff" "Press ENTER to print to thermal printer, or ESC to abort:"
+    else
+        gum style --foreground="#ffaa00" "📺 No printer found - Press any key to exit:"
+    fi
+
+    # Read single keypress
+    read -rsn1 key
+
+    # Handle keypress
+    if [ -e /dev/usb/lp0 ]; then
+        if [ "$key" = "" ]; then  # Enter key
+            gum style --foreground="#00ccff" --bold "🖨️  Printing to thermal printer..."
+            {
+                printf "${esc}t\x00"      # Select PC437 character table
+                printf "${esc}M\x01"      # Switch to Font B
+                printf "%s\n" "$art_output_pc437"
+                printf "${esc}d\x$(printf '%02x' $lines)"  # Feed lines
+                printf "${gs}VA\x00"     # Cut paper
+            } > /dev/usb/lp0
+            gum style --foreground="#00ff00" "✅ Printed to thermal printer"
+        elif [ "$key" = $'\e' ]; then  # ESC key
+            gum style --foreground="#ff9900" "🚫 Printing aborted"
+        else
+            gum style --foreground="#ff9900" "🚫 Invalid key - printing aborted"
+        fi
+    else
+        gum style --foreground="#00ff00" "👋 Goodbye!"
+    fi
 fi
