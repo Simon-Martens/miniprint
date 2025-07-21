@@ -32,7 +32,7 @@ generate_ascii_art() {
    !\"#\$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_\`abcdefghijklmnopqrstuvwxyz{|}~
    ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═
    ╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αβΓπΣσμτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■
-- Prefer -><!\"#\()*-./:;=@_\|}~░▒▓│┤┐└┴┬├─┼┘┌█▄▌▐▀∞≡±≥≤⌠⌡∙·■ for drawing shapes and lines.
+- Prefer -><!\"#\()*-./:;=@_\|}~░▒▓│┤┐└┴┬├─┼┘┌█▄▌▐▀∞≡±≥≤⌠⌡∙·■ for drawing shapes and lines. Generally prefer the fist 128 characters of the ASCII table.
 - As an additional prerequisite the printed ASCII art should include the name of the term somehow inside the graphic.
 - $width_emphasis, height max. 20 lines
 	- Just output the ASCII art, nothing else
