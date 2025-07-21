@@ -11,26 +11,48 @@ generate_ascii_art() {
         width_emphasis="CRITICAL: Absolute maximum width is 52 characters per line - any line longer will be rejected. Count characters carefully!"
     fi
     
-    claude "Create art. Create an abstract, geometric ASCII visualization of the term \"$term\". A minimalsitic effect is also allowed if the subject matter fits, or the surprise is right. Creativity is key, be original. 
+    claude -p "Create art. Create an abstract, geometric ASCII visualization of the term \"$term\". A minimalsitic effect is also allowed if the subject matter fits, or the surprise is right. Creativity is key, be original. 
 - Palette (ONLY use these characters):
    !\"#\$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_\`abcdefghijklmnopqrstuvwxyz{|}~
    ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═
    ╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αβΓπΣσμτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■
 - As an additional prerequisite the printed ASCII art should include the name of the term somehow inside the graphic.
 - Output limitations:
-- $width_emphasis, heigt max. 26 lines
-	- Just outpput the ASCII art, nothing else
+- $width_emphasis, height max. 20 lines
+	- Just output the ASCII art, nothing else
 	- Shape mirrors concept - make the visual form embody the word's essence.
 - Examples:
 * \"explosion\" → radiating lines from center with 
 * \"hierarchy\" → pyramid structure with ═ ║ patterns
 * \"flow\" → curved directional lines with patterns
-- You can ambed a small 2-5 line poem that generally rhymes about the subject matter, but it is not required."
+- Border: Avoid borders unless absolutely essential for the concept (e.g., only for terms like \"boundary\", \"frame\", \"containment\").
+- You can embed a small 2-5 line poem that generally rhymes about the subject matter, but it is not required."
 }
 
 if [ $# -eq 0 ]; then
     # Get Claude to choose a random term
-    term=$(claude "Claude, please choose a DIFFERENT random term each time from one of these fields: mathematics, logic, science theory, theoretical physics, or computer science. Prefer CS, logic or science theory, but all fields are available. Be as random as you can. Just respond with the single term, nothing else.")
+    timestamp=$(date +%s%N)
+    random_seed=$((RANDOM + timestamp % 1000000))
+    
+    # Check for previous terms to avoid repetition
+    history_file="/tmp/reflect_terms.txt"
+    exclusion_prompt=""
+    field_balance_prompt=""
+    if [ -f "$history_file" ]; then
+        previous_terms=$(cat "$history_file")
+        exclusion_prompt="NOT THE TERMS: $previous_terms. "
+        field_balance_prompt="Look at previous terms and vary the field - avoid repeating from the same domain too often. "
+    fi
+    
+    term=$(claude -p "Random seed: $random_seed. ${exclusion_prompt}${field_balance_prompt}Pick ONE obscure/niche term from: mathematics (topology, category theory, algebraic geometry), logic (modal logic, proof theory, type systems), theoretical physics (quantum field theory, general relativity, statistical mechanics), computer science (lambda calculus, complexity theory, formal verification, programming terms, patterns, computer terminoly, historic or contemporary), or philosophy of science (epistemology, falsifiability, paradigms). Choose something DIFFERENT each time. Be maximally random. RETURN ONE WORD ONLY.")
+    
+    # Save the chosen term to history
+    if [ -f "$history_file" ]; then
+        echo "$term, " >> "$history_file"
+    else
+        echo "$term, " > "$history_file"
+    fi
+    
     gum style --foreground="#00ff00" --bold "🎲 Selected random term: $term"
 else
     term="$1"
@@ -101,17 +123,33 @@ lines=3
 esc='\x1b'
 gs='\x1d'
 
-# Write to printer if available
+# Wait for user input
 if [ -e /dev/usb/lp0 ]; then
-    gum style --foreground="#00ccff" --bold "🖨️  Printing to thermal printer..."
-    {
-        printf "${esc}t\x00"      # Select PC437 character table
-        printf "${esc}M\x01"      # Switch to Font B
-        printf "%s\n" "$art_output"
-        printf "${esc}d\x$(printf '%02x' $lines)"  # Feed lines
-        printf "${gs}VA\x00"     # Cut paper
-    } > /dev/usb/lp0
-    gum style --foreground="#00ff00" "✅ Printed to thermal printer"
+    gum style --foreground="#00aaff" "Press ENTER to print to thermal printer, or ESC to abort:"
 else
-    gum style --foreground="#ffaa00" "📺 No printer found - console output only"
+    gum style --foreground="#ffaa00" "📺 No printer found - Press any key to exit:"
+fi
+
+# Read single keypress
+read -rsn1 key
+
+# Handle keypress
+if [ -e /dev/usb/lp0 ]; then
+    if [ "$key" = "" ]; then  # Enter key
+        gum style --foreground="#00ccff" --bold "🖨️  Printing to thermal printer..."
+        {
+            printf "${esc}t\x00"      # Select PC437 character table
+            printf "${esc}M\x01"      # Switch to Font B
+            printf "%s\n" "$art_output"
+            printf "${esc}d\x$(printf '%02x' $lines)"  # Feed lines
+            printf "${gs}VA\x00"     # Cut paper
+        } > /dev/usb/lp0
+        gum style --foreground="#00ff00" "✅ Printed to thermal printer"
+    elif [ "$key" = $'\e' ]; then  # ESC key
+        gum style --foreground="#ff9900" "🚫 Printing aborted"
+    else
+        gum style --foreground="#ff9900" "🚫 Invalid key - printing aborted"
+    fi
+else
+    gum style --foreground="#00ff00" "👋 Goodbye!"
 fi
