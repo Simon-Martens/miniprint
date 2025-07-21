@@ -2,11 +2,16 @@
 
 # Parse command line arguments
 NON_INTERACTIVE=false
+DEBUG=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --non-interactive)
             NON_INTERACTIVE=true
+            shift
+            ;;
+        --debug)
+            DEBUG=true
             shift
             ;;
         *)
@@ -16,18 +21,87 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Function to generate ASCII art with Claude
+# Replace problematic Unicode characters with ASCII alternatives
+replace_unicode_chars() {
+    local input="$1"
+    echo "$input" | sed \
+        -e 's/◄/</g' \
+        -e 's/►/>/g' \
+        -e 's/▲/|/g' \
+        -e 's/▼/|/g' \
+        -e 's/◀/</g' \
+        -e 's/▶/>/g' \
+        -e 's/△/|/g' \
+        -e 's/▽/|/g' \
+        -e 's/←/</g' \
+        -e 's/→/>/g' \
+        -e 's/↑/|/g' \
+        -e 's/↓/|/g' \
+        -e 's/⬅/</g' \
+        -e 's/➡/>/g' \
+        -e 's/⬆/|/g' \
+        -e 's/⬇/|/g' \
+        -e 's/↔/<>/g' \
+        -e 's/↕/|/g' \
+        -e 's/⇐/</g' \
+        -e 's/⇒/>/g' \
+        -e 's/⇑/|/g' \
+        -e 's/⇓/|/g' \
+        -e 's/⇔/<>/g' \
+        -e 's/⇕/|/g' \
+        -e 's/●/*/g'
+}
+
+# Function to generate ASCII art with Claude (with optional term generation)
 generate_ascii_art() {
     local term="$1"
     local attempt="$2"
     local width_emphasis="max width of 52 characters per line (!important)"
+    local term_generation_prompt=""
     
     # Strengthen emphasis on subsequent attempts
     if [ "$attempt" -gt 1 ]; then
         width_emphasis="CRITICAL: Absolute maximum width is 52 characters per line - any line longer will be rejected. Count characters carefully!"
     fi
     
-    claude -p "Create art. Create an abstract, geometric ASCII visualization of the term \"$term\". A minimalsitic effect is also allowed if the subject matter fits, or the surprise is right. Creativity is key, be original. 
+    # If no term provided, add term generation to the prompt
+    if [ -z "$term" ]; then
+        # Get random seed and history for term selection
+        timestamp=$(date +%s%N)
+        random_seed=$((RANDOM + timestamp % 1000000))
+        history_file="/tmp/reflect_terms.txt"
+        exclusion_prompt=""
+        field_balance_prompt=""
+        if [ -f "$history_file" ]; then
+            previous_terms=$(cat "$history_file")
+            exclusion_prompt="NOT THE TERMS: $previous_terms. "
+            field_balance_prompt="Look at previous terms and vary the field - avoid repeating from the same domain too often. "
+        fi
+        
+        term_generation_prompt="FIRST: ${exclusion_prompt}${field_balance_prompt}Pick ONE obscure/niche term from: mathematics (topology, category theory, algebraic geometry), logic (modal logic, proof theory, type systems), theoretical physics (quantum field theory, general relativity, statistical mechanics, particles), computer science (lambda calculus, complexity theory, formal verification, programming terms, patterns, computer terminology, historic or contemporary), philosophy of science (epistemology, falsifiability, paradigms), or abstract concepts of philosophy and philosophy of the mind (identity, projection, emergence, recursion, transformation, boundary, flow, structure, self, future, decisive, own, becoming, void, essence). Choose something DIFFERENT each time. Be maximally random. Choose Term No $random_seed.
+
+CRITICAL OUTPUT FORMAT REQUIREMENT:
+Your response MUST start with exactly: //TERM_NAME (where TERM_NAME is the term you selected)
+Then on the next line, start the ASCII art.
+
+Example:
+//TOPOLOGY
+[ASCII art here]
+
+THEN: Using that term, create an abstract, geometric ASCII visualization of that term."
+    else
+        term_generation_prompt="CRITICAL OUTPUT FORMAT REQUIREMENT:
+Your response MUST start with exactly: //$term
+Then on the next line, start the ASCII art.
+
+Example:
+//$term
+[ASCII art here]
+
+Create an abstract, geometric ASCII visualization of the term \"$term\"."
+    fi
+    
+    local full_prompt="$term_generation_prompt A minimalsitic effect is also allowed if the subject matter fits, or the surprise is right. Creativity is key, be original. 
 - Palette (ONLY use these characters):
    !\"#\$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_\`abcdefghijklmnopqrstuvwxyz{|}~ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αβΓπΣσμτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ 
 - Prefer -><!\"#\()*-./:;=@_\|}~░▒▓│┤┐└┴┬├─┼┘┌█▄▌▐▀∞≡±≥≤⌠⌡∙·■ for drawing shapes and lines. Generally prefer the fist 128 characters of the ASCII table. Border: Avoid borders unless absolutely essential for the concept (e.g., only for terms like \"boundary\", \"frame\", \"containment\"). Arrows: Use -> <- only. No triangular arrows (▲▼◄►) - they're not in the character set.
@@ -53,10 +127,10 @@ generate_ascii_art() {
        ' . • * '
        / | \ / | \
       /  |  V  |  \
-     ( Thought's spark, a inner light, )
-     ( Perceptions woven, day and night. )
-     ( A boundless realm, where self takes flight, )
-     ( And brings the world into our sight. )
+     Thought's spark, a inner light,
+     Perceptions woven, day and night.
+     ( A boundless realm, where self takes flight,
+     And brings the world into our sight. )
 
 // QUEUE //
 >─Q──U──E──U──E─>
@@ -69,60 +143,144 @@ A─┌>─L──G─┐
   ├─R──I──T──┐
   │   T   H  │
   └──>M───<──┘
-- You can embed a small 2-6 line poem that generally rhymes about the subject matter, but it is not required.
-- Just output the ASCII art, nothing else"
-}
-
-if [ -z "$term" ]; then
-    # Get Claude to choose a random term
-    timestamp=$(date +%s%N)
-    random_seed=$((RANDOM + timestamp % 1000000))
+- You can embed a small 2-6 line poem that generally rhymes about the subject matter, but it is not required."
     
-    # Check for previous terms to avoid repetition
-    history_file="/tmp/reflect_terms.txt"
-    exclusion_prompt=""
-    field_balance_prompt=""
-    if [ -f "$history_file" ]; then
-        previous_terms=$(cat "$history_file")
-        exclusion_prompt="NOT THE TERMS: $previous_terms. "
-        field_balance_prompt="Look at previous terms and vary the field - avoid repeating from the same domain too often. "
+    # Print debug info if requested
+    if [ "$DEBUG" = true ]; then
+        echo "=== DEBUG: Claude Request ===" >&2
+        echo "$full_prompt" >&2
+        echo "============================" >&2
     fi
     
-    term=$(claude -p "Random seed: $random_seed. ${exclusion_prompt}${field_balance_prompt}Pick ONE obscure/niche term from: mathematics (topology, category theory, algebraic geometry), logic (modal logic, proof theory, type systems), theoretical physics (quantum field theory, general relativity, statistical mechanics, particles), computer science (lambda calculus, complexity theory, formal verification, programming terms, patterns, computer terminology, historic or contemporary), philosophy of science (epistemology, falsifiability, paradigms), or abstract concepts of philosophy and philosophy of the mind (identity, projection, emergence, recursion, transformation, boundary, flow, structure, self, future, decisive, own, becoming, void, essence). Choose something DIFFERENT each time. Be maximally random. RETURN ONE TERM ONLY.")
+    local output
+    output=$(claude -p "$full_prompt")
     
-    # Save the chosen term to history
-    if [ -f "$history_file" ]; then
-        echo "$term, " >> "$history_file"
+    # Print debug info for Claude output if requested
+    if [ "$DEBUG" = true ]; then
+        echo "=== DEBUG: Claude Response ===" >&2
+        echo "$output" >&2
+        echo "==============================" >&2
+    fi
+    
+    # Extract term from //TERM format and separate art
+    local parsed_term=""
+    local art_only=""
+    
+    if [[ "$output" =~ ^//([^$'\n']+) ]]; then
+        parsed_term="${BASH_REMATCH[1]}"
+        # Remove the //TERM line and get just the art
+        art_only=$(echo "$output" | sed '1d')
+        
+        if [ "$DEBUG" = true ]; then
+            echo "=== DEBUG: Regex matched! ===" >&2
+            echo "Parsed term: '$parsed_term'" >&2
+            echo "===========================" >&2
+        fi
+        
+        # If no term was provided originally, save to history
+        if [ -z "$term" ]; then
+            if [ -f "$history_file" ]; then
+                echo "$parsed_term, " >> "$history_file"
+            else
+                echo "$parsed_term, " > "$history_file"
+            fi
+        fi
     else
-        echo "$term, " > "$history_file"
+        # Fallback if format not followed - try to extract term from art
+        art_only="$output"
+        if [ "$DEBUG" = true ]; then
+            echo "=== DEBUG: Regex did NOT match ===" >&2
+            echo "Falling back to art extraction..." >&2
+        fi
+        if [ -z "$term" ]; then
+            # Try to extract a term from the art itself
+            parsed_term=$(echo "$output" | grep -o '[A-Z][A-Z][A-Z][A-Z]*' | head -1)
+            if [ "$DEBUG" = true ]; then
+                echo "Extracted from art: '$parsed_term'" >&2
+                echo "==============================" >&2
+            fi
+            if [ -n "$parsed_term" ]; then
+                # Save to history
+                if [ -f "$history_file" ]; then
+                    echo "$parsed_term, " >> "$history_file"
+                else
+                    echo "$parsed_term, " > "$history_file"
+                fi
+            fi
+        else
+            parsed_term="$term"
+        fi
     fi
     
-    if [ "$NON_INTERACTIVE" != true ]; then
-        gum style --foreground="#00ff00" --bold "🎲 Selected random term: $term"
-    fi
-fi
+    # Return the term and art separated by a special marker
+    echo "PARSED_TERM:$parsed_term"
+    echo "$art_only"
+}
 
 # Generate ASCII art with retry logic
 max_attempts=3
 attempt=1
 
 while [ $attempt -le $max_attempts ]; do
-    art_output=$(generate_ascii_art "$term" "$attempt" 2>/dev/null)
+    full_output=""
+    if [ "$DEBUG" = true ]; then
+        full_output=$(generate_ascii_art "$term" "$attempt")
+    else
+        full_output=$(generate_ascii_art "$term" "$attempt" 2>/dev/null)
+    fi
     
-    if [ -z "$art_output" ]; then
+    if [ -z "$full_output" ]; then
         gum style --foreground="#ff0000" --bold "❌ Failed to generate ASCII art"
         exit 1
     fi
     
+    # Extract the parsed term from the first line
+    PARSED_TERM=$(echo "$full_output" | head -1 | sed 's/^PARSED_TERM://')
+    
+    # Get just the art (everything except the first line)
+    art_output=$(echo "$full_output" | tail -n +2)
+    
     # Clean output - remove code blocks and extra formatting
     art_output=$(echo "$art_output" | sed 's/```[a-zA-Z]*//g' | sed '/^$/d')
+    
+    # Replace problematic Unicode characters with ASCII alternatives
+    art_output=$(replace_unicode_chars "$art_output")
+    
+    # Use the parsed term from the function, or timestamp if none available
+    if [ "$DEBUG" = true ]; then
+        echo "=== DEBUG: Variable Check ===" >&2
+        echo "term: '$term'" >&2
+        echo "PARSED_TERM: '$PARSED_TERM'" >&2
+        echo "============================" >&2
+    fi
+    
+    if [ -n "$term" ]; then
+        display_term="$term"
+        filename_term="$term"
+    elif [ -n "$PARSED_TERM" ]; then
+        display_term="$PARSED_TERM"
+        filename_term="$PARSED_TERM"
+    else
+        display_term="Unknown"
+        filename_term=$(date +%Y%m%d_%H%M%S)
+    fi
+    
+    if [ "$DEBUG" = true ]; then
+        echo "=== DEBUG: Final Terms ===" >&2
+        echo "display_term: '$display_term'" >&2
+        echo "filename_term: '$filename_term'" >&2
+        echo "==========================" >&2
+    fi
     
     # Check line width constraint (52 chars max)
     max_line_length=$(echo "$art_output" | wc -L)
     
     if [ "$max_line_length" -le 62 ]; then
         if [ "$NON_INTERACTIVE" != true ]; then
-            gum style --foreground="#00ff00" --bold "✅ Generated ASCII art for term: $term (attempt $attempt)"
+            if [ -z "$term" ]; then
+                gum style --foreground="#00ff00" --bold "🎲 Selected random term: $display_term"
+            fi
+            gum style --foreground="#00ff00" --bold "✅ Generated ASCII art for term: $display_term (attempt $attempt)"
             gum style --border="rounded" --padding="1" --margin="1" "$art_output"
         fi
         break
@@ -138,6 +296,8 @@ if [ $attempt -gt $max_attempts ]; then
     gum style --foreground="#ff0000" --bold "❌ Failed to generate ASCII art within width constraints after $max_attempts attempts"
     exit 1
 fi
+
+
 
 # Convert UTF-8 to PC437 encoding
 convert_to_pc437() {
@@ -167,9 +327,9 @@ convert_to_pc437() {
 mkdir -p /tmp/reflect
 
 # Save original output to file (without PC437 conversion for display)
-echo "$art_output" > "/tmp/reflect/${term}.txt"
+echo "$art_output" > "/tmp/reflect/${filename_term}.txt"
 if [ "$NON_INTERACTIVE" != true ]; then
-    gum style --foreground="#0088ff" "💾 Saved ASCII art to /tmp/reflect/${term}.txt"
+    gum style --foreground="#0088ff" "💾 Saved ASCII art to /tmp/reflect/${filename_term}.txt"
 fi
 
 # Convert to PC437 for printer only
@@ -199,7 +359,7 @@ if [ "$NON_INTERACTIVE" = true ]; then
     clear
     echo
     echo
-    gum style --foreground="#666666" --align="center" "$term"
+    gum style --foreground="#666666" --align="center" "$display_term"
     echo
     echo
     echo
