@@ -4,6 +4,7 @@
 NON_INTERACTIVE=false
 INTERACTIVE=false
 DEBUG=false
+EXPENSIVE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -17,6 +18,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --debug)
             DEBUG=true
+            shift
+            ;;
+        --expensive)
+            EXPENSIVE=true
             shift
             ;;
         *)
@@ -84,6 +89,45 @@ center_ascii_art() {
     done
 }
 
+# Cleanup and refine output with second Claude call (for --expensive mode)
+cleanup_output() {
+    local input="$1"
+    local cleanup_prompt="Your task is to clean up and refine this ASCII art output. Please:
+
+1. CRITICAL: Remove ALL backticks and code block markers (\`\`\`, \`\`\`text, etc.) completely - delete entire lines that contain only these markers
+2. Fix alignment issues - ensure all vertical lines (│, ║, |) properly connect and align
+3. Check box drawing characters - make sure corners, intersections, and connections are correct
+4. Order and organize the lines properly
+5. Use only characters from the PC437 character set: !\"#\$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_\`abcdefghijklmnopqrstuvwxyz{|}~ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αβΓπΣσμτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■
+6. Replace any incompatible characters with similar ones from the PC437 character set
+7. If there is both a poem and ASCII art, add an empty line between them
+8. Ensure maximum width is 56 characters per line
+9. Keep the overall meaning and visual impact intact
+10. CRITICAL: Remove any formatting artifacts like triple backticks, and ensure clean box drawing alignment
+
+Input to clean up:
+$input
+
+Return only the cleaned up version without any explanations or additional text."
+
+    if [ "$DEBUG" = true ]; then
+        echo "=== DEBUG: Cleanup Request ===" >&2
+        echo "$cleanup_prompt" >&2
+        echo "==============================" >&2
+    fi
+    
+    local cleaned_output
+    cleaned_output=$(claude -p "$cleanup_prompt")
+    
+    if [ "$DEBUG" = true ]; then
+        echo "=== DEBUG: Cleanup Response ===" >&2
+        echo "$cleaned_output" >&2
+        echo "===============================" >&2
+    fi
+    
+    echo "$cleaned_output"
+}
+
 # Function to generate ASCII art with Claude (with optional term generation)
 generate_ascii_art() {
     local term="$1"
@@ -140,7 +184,8 @@ CONSTRAINTS:
     3. IF THERE IS A POEM IT SHOULD RHYME. THERE SHOULD BE A BLANK LINE BETWEEN THE ASCII ART AND THE POEM. 
     4. THE MAX WIDTH OF THE PAPER IS 56 CHARACTERS. THE ASCII ART CAN NOT EXCEED THIS WIDTH. $width_emphasis
     5. THE MAX LENGTH OF ONE GENERATION RUN SHOULD NOT EXCEED 18 LINES.
-    6. CRITICAL: THE TERM MUST BE INCLUDED IN THE ASCII ART BY CLEVERLY ARRANGING THE LETTERS OF THE TERM WITHIN THE GRAPHIC DESIGN - SEE EXAMPLES HOW THE LETTERS ARE INTEGRATED INTO THE VISUAL REPRESENTATION. IF THE CLEVER ARRANGEMENT OF LETTERS FAILS, THE TITLE CAN BE ABOVE OR INSIDE THE ASCII ART.
+    6. CRITICAL: MAINTAIN PERFECT VERTICAL ALIGNMENT. All vertical lines (│, ║, |) must be in EXACTLY the same column position throughout the entire design. Use consistent spacing and padding to ensure box structures maintain their shape.
+    7. CRITICAL: THE TERM MUST BE INCLUDED IN THE ASCII ART BY CLEVERLY ARRANGING THE LETTERS OF THE TERM WITHIN THE GRAPHIC DESIGN - SEE EXAMPLES HOW THE LETTERS ARE INTEGRATED INTO THE VISUAL REPRESENTATION. IF THE CLEVER ARRANGEMENT OF LETTERS FAILS, THE TITLE CAN BE ABOVE OR INSIDE THE ASCII ART.
 EXAMPLES:
     //STACK
     ┌─S─T─A─C─K─┐
@@ -277,10 +322,18 @@ while [ $attempt -le $max_attempts ]; do
     art_output=$(echo "$full_output" | tail -n +2)
     
     # Clean output - remove code blocks and extra formatting
-    art_output=$(echo "$art_output" | sed 's/```[a-zA-Z]*//g' | sed '/^$/d')
+    art_output=$(echo "$art_output" | sed '/^\`\`\`[a-zA-Z]*$/d' | sed '/^\`\`\`$/d' | sed 's/\`\`\`[a-zA-Z]*//g' | sed 's/\`\`\`//g' | sed '/^$/d')
     
     # Replace problematic Unicode characters with ASCII alternatives
     art_output=$(replace_unicode_chars "$art_output")
+    
+    # If expensive mode is enabled, run cleanup pass
+    if [ "$EXPENSIVE" = true ]; then
+        if [ "$NON_INTERACTIVE" != true ] && [ "$INTERACTIVE" != true ]; then
+            gum style --foreground="#ffaa00" "🔄 Running expensive cleanup pass..."
+        fi
+        art_output=$(cleanup_output "$art_output")
+    fi
     
     # Center the ASCII art
     art_output=$(center_ascii_art "$art_output")
