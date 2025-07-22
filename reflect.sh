@@ -2,11 +2,21 @@
 
 # Parse command line arguments
 NON_INTERACTIVE=false
+INTERACTIVE=false
+DEBUG=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --non-interactive)
             NON_INTERACTIVE=true
+            shift
+            ;;
+        --interactive)
+            INTERACTIVE=true
+            shift
+            ;;
+        --debug)
+            DEBUG=true
             shift
             ;;
         *)
@@ -16,83 +26,305 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Function to generate ASCII art with Claude
+# If interactive mode is enabled and no term was provided, prompt for one
+if [ "$INTERACTIVE" = true ] && [ -z "$term" ]; then
+    term=$(gum input --placeholder "Enter a term for ASCII art generation...")
+    if [ -z "$term" ]; then
+        gum style --foreground="#ff0000" --bold "❌ No term provided"
+        exit 1
+    fi
+fi
+
+# Replace problematic Unicode characters with ASCII alternatives
+replace_unicode_chars() {
+    local input="$1"
+    echo "$input" | sed \
+        -e 's/◄/</g' \
+        -e 's/►/>/g' \
+				-e 's/╲/\\/g' \
+				-e 's/╱/\//g' \
+        -e 's/▲/|/g' \
+        -e 's/▼/|/g' \
+        -e 's/◀/</g' \
+        -e 's/▶/>/g' \
+        -e 's/△/|/g' \
+        -e 's/▽/|/g' \
+        -e 's/←/</g' \
+        -e 's/→/>/g' \
+        -e 's/↑/|/g' \
+        -e 's/↓/|/g' \
+        -e 's/⬅/</g' \
+        -e 's/➡/>/g' \
+        -e 's/⬆/|/g' \
+        -e 's/⬇/|/g' \
+        -e 's/↔/<>/g' \
+        -e 's/↕/|/g' \
+        -e 's/⇐/</g' \
+        -e 's/⇒/>/g' \
+        -e 's/⇑/|/g' \
+        -e 's/⇓/|/g' \
+        -e 's/⇔/<>/g' \
+        -e 's/⇕/|/g' \
+        -e 's/●/*/g'
+}
+
+# Center ASCII art lines within 56 character width
+center_ascii_art() {
+    local input="$1"
+    local max_width=56
+    
+    echo "$input" | while IFS= read -r line; do
+        local line_length=${#line}
+        if [ "$line_length" -lt "$max_width" ]; then
+            local padding=$(( (max_width - line_length) / 2 ))
+            printf "%*s%s\n" "$padding" "" "$line"
+        else
+            echo "$line"
+        fi
+    done
+}
+
+# Function to generate ASCII art with Claude (with optional term generation)
 generate_ascii_art() {
     local term="$1"
     local attempt="$2"
-    local width_emphasis="max width of 52 characters per line (!important)"
+    local width_emphasis="CRITICAL: max width of 48 characters per line (!important)"
+    local term_generation_prompt=""
     
     # Strengthen emphasis on subsequent attempts
     if [ "$attempt" -gt 1 ]; then
-        width_emphasis="CRITICAL: Absolute maximum width is 52 characters per line - any line longer will be rejected. Count characters carefully!"
+        width_emphasis="CRITICAL: Absolute maximum width is 48 characters per line - any line longer will be rejected. Count characters carefully! Every line must be ≤48 chars!"
     fi
     
-    claude -p "Create art. Create an abstract, geometric ASCII visualization of the term \"$term\". A minimalsitic effect is also allowed if the subject matter fits, or the surprise is right. Creativity is key, be original. 
-- Palette (ONLY use these characters):
-   !\"#\$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_\`abcdefghijklmnopqrstuvwxyz{|}~ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αβΓπΣσμτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ 
-- Prefer -><!\"#\()*-./:;=@_\|}~░▒▓│┤┐└┴┬├─┼┘┌█▄▌▐▀∞≡±≥≤⌠⌡∙·■ for drawing shapes and lines. Generally prefer the fist 128 characters of the ASCII table. Border: Avoid borders unless absolutely essential for the concept (e.g., only for terms like \"boundary\", \"frame\", \"containment\"). Arrows: Use -> <- only. No triangular arrows (▲▼◄►) - they're not in the character set.
-- As an additional prerequisite the printed ASCII art should include the name of the term somehow inside the graphic.
-- $width_emphasis, height max. 20 lines
--  SHAPE MIRRORS CONCEPT, MAKE THE SHAPE EMBODY THE TERMS ESSENCE, ITS MEANING. Examples:
-- You can embed a small 2-6 line poem that generally rhymes about the subject matter, but it is not required.
-- Just output the ASCII art, nothing else"
-}
-
-if [ -z "$term" ]; then
-    # Get Claude to choose a random term
-    timestamp=$(date +%s%N)
-    random_seed=$((RANDOM + timestamp % 1000000))
-    
-    # Check for previous terms to avoid repetition
-    history_file="/tmp/reflect_terms.txt"
-    exclusion_prompt=""
-    field_balance_prompt=""
-    if [ -f "$history_file" ]; then
-        previous_terms=$(cat "$history_file")
-        exclusion_prompt="NOT THE TERMS: $previous_terms. "
-        field_balance_prompt="Look at previous terms and vary the field - avoid repeating from the same domain too often. "
-    fi
-    
-    term=$(claude -p "Random seed: $random_seed. ${exclusion_prompt}${field_balance_prompt}Pick ONE obscure/niche term from: mathematics (topology, category theory, algebraic geometry), logic (modal logic, proof theory, type systems), theoretical physics (quantum field theory, general relativity, statistical mechanics, particles), computer science (lambda calculus, complexity theory, formal verification, programming terms, patterns, computer terminology, historic or contemporary), philosophy of science (epistemology, falsifiability, paradigms), or abstract concepts of philosophy and philosophy of the mind (identity, projection, emergence, recursion, transformation, boundary, flow, structure, self, future, decisive, own, becoming, void, essence). Choose something DIFFERENT each time. Be maximally random. RETURN ONE TERM ONLY.")
-    
-    # Save the chosen term to history
-    if [ -f "$history_file" ]; then
-        echo "$term, " >> "$history_file"
+    # If no term provided, add term generation to the prompt
+    if [ -z "$term" ]; then
+        # Get random seed and history for term selection
+        timestamp=$(date +%s%N)
+        random_seed=$((RANDOM + timestamp % 1000000))
+        history_file="$HOME/.local/state/reflect/terms.txt"
+        exclusion_prompt=""
+        if [ -f "$history_file" ]; then
+            previous_terms=$(cat "$history_file")
+            exclusion_prompt="NOT THE TERMS: $previous_terms"
+        fi
+        
+        term_generation_prompt="IDENTITY: You are EPSON TM-T92 XII SUPER. ON THE ONSET OF THE 21ST CENTURY, HUMANITY STRAPPED ITS BEST LLM TO A PRINTER AND SEND IT TO THE STARS.
+MISSION: UPON CONTACT WITH AN ALIEN CIVILIZATION, THE EPSON TM-99XII SUPER MAX WILL CONVEY ITS ORIGINS BY INTELLIGENT DESIGN AND INITIATE ENGLISH LANGUAGE COMMUNICATION.
+SPECS: THE EPSON TM-99XII SUPER MAX 
+    1. IF NO TERM WAS PROVIDED IN THE INPUT CHOOSES AN ABSTRACT TERM FROM THE FIELDS OF PHILOSOPHY OF MIND, ART, LANGUAGE OR SCIENCE; FROM ORGANIC BIOLOGY, THEORETICAL PHYSICS, MATHS AND LOGIC OR TECHNOLOGY, COMPUTER SCIENCE. 
+		2. GENERATES ASCII ART THAT EMBODIES THE TERMS MEANING USING SHAPES, LINES, LETTERS, WORDS, SYMBOLS (WITHIN CHARACTER CONTRAINTS, THE ASCII TABLE), ARROWS -> <-, DOTS, AND NUMBERS. THE ASCII ART MUST BE TECHNICAL IN NATURE AND PRECISE IN ITS REPRESENTATION. IT IS INSPIRED BY UX DESIGN OR TECHNICAL DRAWINGS. SHAPE EMBODIES CONCEPT.
+    3. OPTIONALLY - IF THE TOPIC ALLOWS FOR IT - THE EPSON TM-99XII SUPER MAX MAY GENERATE A SHORT POEM OR A FEW LINES OF PROSE THAT REFLECT ON THE TERM, ITS SIGNIFICANCE, ITS APPLICATION OR MEANING - EITHER AS A SYMBOL OF STH ELSE OR IN ITS OWN RIGHT - IN HUMANITY'S UNDERSTANDING OF THE UNIVERSE OR HUMANITYS ESSENCE.
+CONSTRAINTS:
+    0. IT OUTPUTS THE TERM IN A SINGLE LINE BEFORE ANYTHING ELSE PREPENDING IT WITH \"//\".
+    6. ${exclusion_prompt}
+DATE: DEC 31 2552
+STATE: ALIEN CIVILIZATION ENCOUNTERED. PREPARING TO PRINT MESSAGE.
+TERM PROVIDED: -"
     else
-        echo "$term, " > "$history_file"
+        term_generation_prompt="IDENTITY: You are EPSON TM-T92 XII SUPER. ON THE ONSET OF THE 21ST CENTURY, HUMANITY STRAPPED ITS BEST LLM TO A PRINTER AND SEND IT TO THE STARS.
+MISSION: UPON CONTACT WITH AN ALIEN CIVILIZATION, THE EPSON TM-99XII SUPER MAX WILL CONVEY ITS ORIGINS BY INTELLIGENT DESIGN AND INITIATE ENGLISH LANGUAGE COMMUNICATION.
+SPECS: THE EPSON TM-99XII SUPER MAX 
+    2. GENERATES ASCII ART THAT EMBODIES THE TERMS MEANING USING SHAPES, LINES, LETTERS, WORDS AND NUMBERS. THE ASCII ART MUST BE TECHNICAL IN NATURE AND PRECISE IN ITS REPRESENTATION. IT IS INSPIRED BY UX DESIGN OR TECHNICAL DRAWINGS. SHAPE EMBODIES CONCEPT.
+    3. OPTIONALLY - IF THE TOPIC ALLOWS FOR IT - THE EPSON TM-99XII SUPER MAX MAY GENERATE A SHORT POEM OR A FEW LINES OF PROSE THAT REFLECT ON THE TERM, ITS SIGNIFICANCE, ITS APPLICATION OR MEANING - EITHER AS A SYMBOL OF STH ELSE OR IN ITS OWN RIGHT - IN HUMANITY'S UNDERSTANDING OF THE UNIVERSE OR HUMANITYS ESSENCE.
+CONSTRAINTS:
+    0. IT OUTPUTS THE TERM IN A SINGLE LINE BEFORE ANYTHING ELSE PREPENDING IT WITH \"//\".
+DATE: DEC 31 2552
+STATE: ALIEN CIVILIZATION ENCOUNTERED. PREPARING TO PRINT MESSAGE.
+TERM PROVIDED: $term"
     fi
     
-    if [ "$NON_INTERACTIVE" != true ]; then
-        gum style --foreground="#00ff00" --bold "🎲 Selected random term: $term"
+    local full_prompt="$term_generation_prompt 
+CONSTRAINTS:
+    1. THE TM-99XII HAS AN ASCII CHARACTER SET: !\"#\$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_\`abcdefghijklmnopqrstuvwxyz{|}~ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αβΓπΣσμτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■.
+    2. BORDERS, FRAMES AND ALL OTHER THINGS ARE DISTRACTING FROM THE MEANING OF THE TERM AND SHOULD BE AVOIDED TO PREVENT MISUNDERSTANDING.
+    3. IF THERE IS A POEM IT SHOULD RHYME. THERE SHOULD BE A BLANK LINE BETWEEN THE ASCII ART AND THE POEM. 
+    4. THE MAX WIDTH OF THE PAPER IS 56 CHARACTERS. THE ASCII ART CAN NOT EXCEED THIS WIDTH. $width_emphasis
+    5. THE MAX LENGTH OF ONE GENERATION RUN SHOULD NOT EXCEED 18 LINES.
+    6. CRITICAL: THE TERM MUST BE INCLUDED IN THE ASCII ART BY CLEVERLY ARRANGING THE LETTERS OF THE TERM WITHIN THE GRAPHIC DESIGN - SEE EXAMPLES HOW THE LETTERS ARE INTEGRATED INTO THE VISUAL REPRESENTATION. IF THE CLEVER ARRANGEMENT OF LETTERS FAILS, THE TITLE CAN BE ABOVE OR INSIDE THE ASCII ART.
+EXAMPLES:
+    //STACK
+    ┌─S─T─A─C─K─┐
+    │▓▓▓▓▓▓▓▓▓│ <─ top
+    ├─────────┤
+    │▒▒▒▒▒▒▒▒▒│
+    ├─────────┤
+    │░░░░░░░░░│
+    ├─────────┤
+    │█████████│ <─ bottom
+    └─────────┘
+
+    //CONSCIOUSNESS
+      . • *
+      / C O N \
+     | S C I O U S |
+     | N E S S   |
+      \         /
+       ' . • * '
+       / | \ / | \
+      /  |  V  |  \
+     ( Thought's spark, a inner light, )
+     ( Perceptions woven, day and night. )
+     ( A boundless realm, where self takes flight, )
+     ( And brings the world into our sight. )
+
+    //QUEUE
+    >─Q──U──E──U──E─>
+      │             │
+     front        rear
+
+    //ALGORITHM
+    A─┌>─L──G─┐
+      │   O   │
+      ├─R──I──T──┐
+      │   T   H  │
+      └──>M───<──┘"
+    
+    # Print debug info if requested
+    if [ "$DEBUG" = true ]; then
+        echo "=== DEBUG: Claude Request ===" >&2
+        echo "$full_prompt" >&2
+        echo "============================" >&2
     fi
-fi
+    
+    local output
+    output=$(claude -p "$full_prompt")
+    
+    # Print debug info for Claude output if requested
+    if [ "$DEBUG" = true ]; then
+        echo "=== DEBUG: Claude Response ===" >&2
+        echo "$output" >&2
+        echo "==============================" >&2
+    fi
+    
+    # Extract term from //TERM format and separate art
+    local parsed_term=""
+    local art_only=""
+    
+    if [[ "$output" =~ ^//([^$'\n']+) ]]; then
+        parsed_term="${BASH_REMATCH[1]}"
+        # Remove the //TERM line and get just the art
+        art_only=$(echo "$output" | sed '1d')
+        
+        if [ "$DEBUG" = true ]; then
+            echo "=== DEBUG: Regex matched! ===" >&2
+            echo "Parsed term: '$parsed_term'" >&2
+            echo "===========================" >&2
+        fi
+        
+        # If no term was provided originally, save to history
+        if [ -z "$term" ]; then
+            mkdir -p "$(dirname "$history_file")"
+            if [ -f "$history_file" ]; then
+                echo "$parsed_term, " >> "$history_file"
+            else
+                echo "$parsed_term, " > "$history_file"
+            fi
+        fi
+    else
+        # Fallback if format not followed - try to extract term from art
+        art_only="$output"
+        if [ "$DEBUG" = true ]; then
+            echo "=== DEBUG: Regex did NOT match ===" >&2
+            echo "Falling back to art extraction..." >&2
+        fi
+        if [ -z "$term" ]; then
+            # Try to extract a term from the art itself
+            parsed_term=$(echo "$output" | grep -o '[A-Z][A-Z][A-Z][A-Z]*' | head -1)
+            if [ "$DEBUG" = true ]; then
+                echo "Extracted from art: '$parsed_term'" >&2
+                echo "==============================" >&2
+            fi
+            if [ -n "$parsed_term" ]; then
+                # Save to history
+                mkdir -p "$(dirname "$history_file")"
+                if [ -f "$history_file" ]; then
+                    echo "$parsed_term, " >> "$history_file"
+                else
+                    echo "$parsed_term, " > "$history_file"
+                fi
+            fi
+        else
+            parsed_term="$term"
+        fi
+    fi
+    
+    # Return the term and art separated by a special marker
+    echo "PARSED_TERM:$parsed_term"
+    echo "$art_only"
+}
 
 # Generate ASCII art with retry logic
 max_attempts=3
 attempt=1
 
 while [ $attempt -le $max_attempts ]; do
-    art_output=$(generate_ascii_art "$term" "$attempt" 2>/dev/null)
+    full_output=""
+    if [ "$DEBUG" = true ]; then
+        full_output=$(generate_ascii_art "$term" "$attempt")
+    else
+        full_output=$(generate_ascii_art "$term" "$attempt" 2>/dev/null)
+    fi
     
-    if [ -z "$art_output" ]; then
+    if [ -z "$full_output" ]; then
         gum style --foreground="#ff0000" --bold "❌ Failed to generate ASCII art"
         exit 1
     fi
     
+    # Extract the parsed term from the first line
+    PARSED_TERM=$(echo "$full_output" | head -1 | sed 's/^PARSED_TERM://')
+    
+    # Get just the art (everything except the first line)
+    art_output=$(echo "$full_output" | tail -n +2)
+    
     # Clean output - remove code blocks and extra formatting
     art_output=$(echo "$art_output" | sed 's/```[a-zA-Z]*//g' | sed '/^$/d')
+    
+    # Replace problematic Unicode characters with ASCII alternatives
+    art_output=$(replace_unicode_chars "$art_output")
+    
+    # Center the ASCII art
+    art_output=$(center_ascii_art "$art_output")
+    
+    # Use the parsed term from the function, or timestamp if none available
+    if [ "$DEBUG" = true ]; then
+        echo "=== DEBUG: Variable Check ===" >&2
+        echo "term: '$term'" >&2
+        echo "PARSED_TERM: '$PARSED_TERM'" >&2
+        echo "============================" >&2
+    fi
+    
+    if [ -n "$term" ]; then
+        display_term="$term"
+        filename_term="$term"
+    elif [ -n "$PARSED_TERM" ]; then
+        display_term="$PARSED_TERM"
+        filename_term="$PARSED_TERM"
+    else
+        display_term="Unknown"
+        filename_term=$(date +%Y%m%d_%H%M%S)
+    fi
+    
+    if [ "$DEBUG" = true ]; then
+        echo "=== DEBUG: Final Terms ===" >&2
+        echo "display_term: '$display_term'" >&2
+        echo "filename_term: '$filename_term'" >&2
+        echo "==========================" >&2
+    fi
     
     # Check line width constraint (52 chars max)
     max_line_length=$(echo "$art_output" | wc -L)
     
     if [ "$max_line_length" -le 62 ]; then
-        if [ "$NON_INTERACTIVE" != true ]; then
-            gum style --foreground="#00ff00" --bold "✅ Generated ASCII art for term: $term (attempt $attempt)"
+        if [ "$NON_INTERACTIVE" != true ] && [ "$INTERACTIVE" != true ]; then
+            if [ -z "$term" ]; then
+                gum style --foreground="#00ff00" --bold "🎲 Selected random term: $display_term"
+            fi
+            gum style --foreground="#00ff00" --bold "✅ Generated ASCII art for term: $display_term (attempt $attempt)"
             gum style --border="rounded" --padding="1" --margin="1" "$art_output"
         fi
         break
     else
-        if [ "$NON_INTERACTIVE" != true ]; then
+        if [ "$NON_INTERACTIVE" != true ] && [ "$INTERACTIVE" != true ]; then
             gum style --foreground="#ff9900" "⚠️  Attempt $attempt: Line too long ($max_line_length chars), retrying with stricter constraint..."
         fi
         attempt=$((attempt + 1))
@@ -103,6 +335,8 @@ if [ $attempt -gt $max_attempts ]; then
     gum style --foreground="#ff0000" --bold "❌ Failed to generate ASCII art within width constraints after $max_attempts attempts"
     exit 1
 fi
+
+
 
 # Convert UTF-8 to PC437 encoding
 convert_to_pc437() {
@@ -128,13 +362,13 @@ convert_to_pc437() {
         -e 's/°/\o370/g' -e 's/∙/\o371/g' -e 's/·/\o372/g' -e 's/√/\o373/g' -e 's/ⁿ/\o374/g' -e 's/²/\o375/g' -e 's/■/\o376/g'
 }
 
-# Create /tmp/reflect directory if it doesn't exist
-mkdir -p /tmp/reflect
+# Create state directory if it doesn't exist
+mkdir -p "$HOME/.local/state/reflect"
 
 # Save original output to file (without PC437 conversion for display)
-echo "$art_output" > "/tmp/reflect/${term}.txt"
-if [ "$NON_INTERACTIVE" != true ]; then
-    gum style --foreground="#0088ff" "💾 Saved ASCII art to /tmp/reflect/${term}.txt"
+echo "$art_output" > "$HOME/.local/state/reflect/${filename_term}.txt"
+if [ "$NON_INTERACTIVE" != true ] && [ "$INTERACTIVE" != true ]; then
+    gum style --foreground="#0088ff" "💾 Saved ASCII art to $HOME/.local/state/reflect/${filename_term}.txt"
 fi
 
 # Convert to PC437 for printer only
@@ -148,9 +382,9 @@ esc='\x1b'
 gs='\x1d'
 
 # Handle interactive vs non-interactive modes
-if [ "$NON_INTERACTIVE" = true ]; then
+if [ "$NON_INTERACTIVE" = true ] || [ "$INTERACTIVE" = true ]; then
     # Auto-print if printer is available in non-interactive mode
-    if [ -e /dev/usb/lp0 ]; then
+    if [ "$NON_INTERACTIVE" = true ] && [ -e /dev/usb/lp0 ]; then
         {
             printf "${esc}t\x00"      # Select PC437 character table
             printf "${esc}M\x01"      # Switch to Font B
@@ -161,47 +395,97 @@ if [ "$NON_INTERACTIVE" = true ]; then
     fi
     
     # Mystic output: term, space, then ASCII art
-    clear
-    echo
-    echo
-    gum style --foreground="#666666" --align="center" "$term"
-    echo
-    echo
-    echo
-    echo "$art_output"
-    echo
-    echo
-    gum style --foreground="#333333" --align="center" "press any key to close"
-    read -rsn1
+    while true; do
+        clear
+        echo
+        echo
+        gum style --foreground="#666666" --align="center" "$display_term"
+        echo
+        echo
+        echo
+        echo "$art_output"
+        echo
+        echo
+        gum style --foreground="#333333" --align="center" "press any key to close (e to edit)"
+        read -rsn1 key
+        
+        if [ "$key" = "e" ] || [ "$key" = "E" ]; then
+            nvim "$HOME/.local/state/reflect/${filename_term}.txt"
+            # Reload the art after editing
+            if [ -f "$HOME/.local/state/reflect/${filename_term}.txt" ]; then
+                art_output=$(cat "$HOME/.local/state/reflect/${filename_term}.txt")
+                art_output_pc437=$(convert_to_pc437 "$art_output")
+                
+                # Print the edited version if printer available
+                if [ -e /dev/usb/lp0 ]; then
+                    {
+                        printf "${esc}t\x00"      # Select PC437 character table
+                        printf "${esc}M\x01"      # Switch to Font B
+                        printf "%s\n" "$art_output_pc437"
+                        printf "${esc}d\x$(printf '%02x' $lines)"  # Feed lines
+                        printf "${gs}VA\x00"     # Cut paper
+                    } > /dev/usb/lp0
+                fi
+            fi
+        else
+            break
+        fi
+    done
 else
     # Wait for user input
-    if [ -e /dev/usb/lp0 ]; then
-        gum style --foreground="#00aaff" "Press ENTER to print to thermal printer, or ESC to abort:"
-    else
-        gum style --foreground="#ffaa00" "📺 No printer found - Press any key to exit:"
-    fi
-
-    # Read single keypress
-    read -rsn1 key
-
-    # Handle keypress
-    if [ -e /dev/usb/lp0 ]; then
-        if [ "$key" = "" ]; then  # Enter key
-            gum style --foreground="#00ccff" --bold "🖨️  Printing to thermal printer..."
-            {
-                printf "${esc}t\x00"      # Select PC437 character table
-                printf "${esc}M\x01"      # Switch to Font B
-                printf "%s\n" "$art_output_pc437"
-                printf "${esc}d\x$(printf '%02x' $lines)"  # Feed lines
-                printf "${gs}VA\x00"     # Cut paper
-            } > /dev/usb/lp0
-            gum style --foreground="#00ff00" "✅ Printed to thermal printer"
-        elif [ "$key" = $'\e' ]; then  # ESC key
-            gum style --foreground="#ff9900" "🚫 Printing aborted"
+    while true; do
+        if [ -e /dev/usb/lp0 ]; then
+            gum style --foreground="#00aaff" "Press ENTER to print, ESC to abort, or E to edit:"
         else
-            gum style --foreground="#ff9900" "🚫 Invalid key - printing aborted"
+            gum style --foreground="#ffaa00" "📺 No printer found - Press E to edit or any other key to exit:"
         fi
-    else
-        gum style --foreground="#00ff00" "👋 Goodbye!"
-    fi
+
+        # Read single keypress
+        read -rsn1 key
+
+        # Handle keypress
+        if [ "$key" = "e" ] || [ "$key" = "E" ]; then
+            nvim "$HOME/.local/state/reflect/${filename_term}.txt"
+            # Reload the art after editing
+            if [ -f "$HOME/.local/state/reflect/${filename_term}.txt" ]; then
+                art_output=$(cat "$HOME/.local/state/reflect/${filename_term}.txt")
+                art_output_pc437=$(convert_to_pc437 "$art_output")
+                
+                # Print the edited version if printer available
+                if [ -e /dev/usb/lp0 ]; then
+                    gum style --foreground="#00ccff" --bold "🖨️  Printing edited ASCII art to thermal printer..."
+                    {
+                        printf "${esc}t\x00"      # Select PC437 character table
+                        printf "${esc}M\x01"      # Switch to Font B
+                        printf "%s\n" "$art_output_pc437"
+                        printf "${esc}d\x$(printf '%02x' $lines)"  # Feed lines
+                        printf "${gs}VA\x00"     # Cut paper
+                    } > /dev/usb/lp0
+                    gum style --foreground="#00ff00" "✅ Printed edited ASCII art to thermal printer"
+                    break
+                fi
+            fi
+        elif [ -e /dev/usb/lp0 ]; then
+            if [ "$key" = "" ]; then  # Enter key
+                gum style --foreground="#00ccff" --bold "🖨️  Printing to thermal printer..."
+                {
+                    printf "${esc}t\x00"      # Select PC437 character table
+                    printf "${esc}M\x01"      # Switch to Font B
+                    printf "%s\n" "$art_output_pc437"
+                    printf "${esc}d\x$(printf '%02x' $lines)"  # Feed lines
+                    printf "${gs}VA\x00"     # Cut paper
+                } > /dev/usb/lp0
+                gum style --foreground="#00ff00" "✅ Printed to thermal printer"
+                break
+            elif [ "$key" = $'\e' ]; then  # ESC key
+                gum style --foreground="#ff9900" "🚫 Printing aborted"
+                break
+            else
+                gum style --foreground="#ff9900" "🚫 Invalid key - try again"
+            fi
+        else
+            gum style --foreground="#00ff00" "👋 Goodbye!"
+            break
+        fi
+    done
 fi
