@@ -72,12 +72,12 @@ replace_unicode_chars() {
 generate_ascii_art() {
     local term="$1"
     local attempt="$2"
-    local width_emphasis="max width of 52 characters per line (!important)"
+    local width_emphasis="CRITICAL: max width of 48 characters per line (!important)"
     local term_generation_prompt=""
     
     # Strengthen emphasis on subsequent attempts
     if [ "$attempt" -gt 1 ]; then
-        width_emphasis="CRITICAL: Absolute maximum width is 52 characters per line - any line longer will be rejected. Count characters carefully!"
+        width_emphasis="CRITICAL: Absolute maximum width is 48 characters per line - any line longer will be rejected. Count characters carefully! Every line must be ≤48 chars!"
     fi
     
     # If no term provided, add term generation to the prompt
@@ -85,7 +85,7 @@ generate_ascii_art() {
         # Get random seed and history for term selection
         timestamp=$(date +%s%N)
         random_seed=$((RANDOM + timestamp % 1000000))
-        history_file="/tmp/reflect_terms.txt"
+        history_file="$HOME/.local/state/reflect/terms.txt"
         exclusion_prompt=""
         field_balance_prompt=""
         if [ -f "$history_file" ]; then
@@ -104,7 +104,7 @@ Example:
 //TOPOLOGY
 [ASCII art here]
 
-THEN: Using that term, create an abstract, geometric, creative, technical ASCII visualization of that term."
+THEN: Using that term, create an ASCII visualization of that term."
     else
         term_generation_prompt="CRITICAL OUTPUT FORMAT REQUIREMENT:
 Your response MUST start with exactly: //$term
@@ -114,7 +114,7 @@ Example:
 //$term
 [ASCII art here]
 
-Create an abstract, geometric, creative, technical ASCII visualization of the term \"$term\"."
+Create an ASCII visualization of the term \"$term\"."
     fi
     
     local full_prompt="$term_generation_prompt 
@@ -159,6 +159,10 @@ A─┌>─L──G─┐
   ├─R──I──T──┐
   │   T   H  │
   └──>M───<──┘
+- Choose between three styles, 
+	1. Minimalist: Use only the term and a few lines dots and simple shapes of ASCII art.
+	2. Abstract: Create patterns and blocks (like in stack above) that represent the term. Aonly few words.
+	3. Technical: Like on an old CRT monitor, use the term and create a technical drawing of the item of the term.
 - You can embed a small 2-6 line poem that generally rhymes about the subject matter, but it is not required."
     
     # Print debug info if requested
@@ -195,6 +199,7 @@ A─┌>─L──G─┐
         
         # If no term was provided originally, save to history
         if [ -z "$term" ]; then
+            mkdir -p "$(dirname "$history_file")"
             if [ -f "$history_file" ]; then
                 echo "$parsed_term, " >> "$history_file"
             else
@@ -217,6 +222,7 @@ A─┌>─L──G─┐
             fi
             if [ -n "$parsed_term" ]; then
                 # Save to history
+                mkdir -p "$(dirname "$history_file")"
                 if [ -f "$history_file" ]; then
                     echo "$parsed_term, " >> "$history_file"
                 else
@@ -339,13 +345,13 @@ convert_to_pc437() {
         -e 's/°/\o370/g' -e 's/∙/\o371/g' -e 's/·/\o372/g' -e 's/√/\o373/g' -e 's/ⁿ/\o374/g' -e 's/²/\o375/g' -e 's/■/\o376/g'
 }
 
-# Create /tmp/reflect directory if it doesn't exist
-mkdir -p /tmp/reflect
+# Create state directory if it doesn't exist
+mkdir -p "$HOME/.local/state/reflect"
 
 # Save original output to file (without PC437 conversion for display)
-echo "$art_output" > "/tmp/reflect/${filename_term}.txt"
+echo "$art_output" > "$HOME/.local/state/reflect/${filename_term}.txt"
 if [ "$NON_INTERACTIVE" != true ] && [ "$INTERACTIVE" != true ]; then
-    gum style --foreground="#0088ff" "💾 Saved ASCII art to /tmp/reflect/${filename_term}.txt"
+    gum style --foreground="#0088ff" "💾 Saved ASCII art to $HOME/.local/state/reflect/${filename_term}.txt"
 fi
 
 # Convert to PC437 for printer only
@@ -387,10 +393,10 @@ if [ "$NON_INTERACTIVE" = true ] || [ "$INTERACTIVE" = true ]; then
         read -rsn1 key
         
         if [ "$key" = "e" ] || [ "$key" = "E" ]; then
-            nvim "/tmp/reflect/${filename_term}.txt"
+            nvim "$HOME/.local/state/reflect/${filename_term}.txt"
             # Reload the art after editing
-            if [ -f "/tmp/reflect/${filename_term}.txt" ]; then
-                art_output=$(cat "/tmp/reflect/${filename_term}.txt")
+            if [ -f "$HOME/.local/state/reflect/${filename_term}.txt" ]; then
+                art_output=$(cat "$HOME/.local/state/reflect/${filename_term}.txt")
                 art_output_pc437=$(convert_to_pc437 "$art_output")
                 
                 # Print the edited version if printer available
@@ -422,10 +428,10 @@ else
 
         # Handle keypress
         if [ "$key" = "e" ] || [ "$key" = "E" ]; then
-            nvim "/tmp/reflect/${filename_term}.txt"
+            nvim "$HOME/.local/state/reflect/${filename_term}.txt"
             # Reload the art after editing
-            if [ -f "/tmp/reflect/${filename_term}.txt" ]; then
-                art_output=$(cat "/tmp/reflect/${filename_term}.txt")
+            if [ -f "$HOME/.local/state/reflect/${filename_term}.txt" ]; then
+                art_output=$(cat "$HOME/.local/state/reflect/${filename_term}.txt")
                 art_output_pc437=$(convert_to_pc437 "$art_output")
                 
                 # Print the edited version if printer available
