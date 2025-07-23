@@ -459,86 +459,19 @@ if [ "$NON_INTERACTIVE" = true ] || [ "$INTERACTIVE" = true ]; then
         echo "$art_output"
         echo
         echo
-        gum style --foreground="#333333" --align="center" "press any key to close (e to edit)"
-        read -rsn1 key
-        
-        if [ "$key" = "e" ] || [ "$key" = "E" ]; then
-            nvim "$HOME/.local/state/reflect/${filename_term}.txt"
-            # Reload the art after editing
-            if [ -f "$HOME/.local/state/reflect/${filename_term}.txt" ]; then
-                art_output=$(cat "$HOME/.local/state/reflect/${filename_term}.txt")
-                art_output_pc437=$(convert_to_pc437 "$art_output")
-                
-                # Print the edited version if printer available
-                if [ -e /dev/usb/lp0 ]; then
-                    {
-                        printf "${esc}t\x00"      # Select PC437 character table
-                        printf "${esc}M\x01"      # Switch to Font B
-                        printf "%s\n" "$art_output_pc437"
-                        printf "${esc}d\x$(printf '%02x' $lines)"  # Feed lines
-                        printf "${gs}VA\x00"     # Cut paper
-                    } > /dev/usb/lp0
-                fi
-            fi
-        else
-            break
-        fi
+        break
     done
 else
-    # Wait for user input
-    while true; do
-        if [ -e /dev/usb/lp0 ]; then
-            gum style --foreground="#00aaff" "Press ENTER to print, ESC to abort, or E to edit:"
-        else
-            gum style --foreground="#ffaa00" "📺 No printer found - Press E to edit or any other key to exit:"
-        fi
-
-        # Read single keypress
-        read -rsn1 key
-
-        # Handle keypress
-        if [ "$key" = "e" ] || [ "$key" = "E" ]; then
-            nvim "$HOME/.local/state/reflect/${filename_term}.txt"
-            # Reload the art after editing
-            if [ -f "$HOME/.local/state/reflect/${filename_term}.txt" ]; then
-                art_output=$(cat "$HOME/.local/state/reflect/${filename_term}.txt")
-                art_output_pc437=$(convert_to_pc437 "$art_output")
-                
-                # Print the edited version if printer available
-                if [ -e /dev/usb/lp0 ]; then
-                    gum style --foreground="#00ccff" --bold "🖨️  Printing edited ASCII art to thermal printer..."
-                    {
-                        printf "${esc}t\x00"      # Select PC437 character table
-                        printf "${esc}M\x01"      # Switch to Font B
-                        printf "%s\n" "$art_output_pc437"
-                        printf "${esc}d\x$(printf '%02x' $lines)"  # Feed lines
-                        printf "${gs}VA\x00"     # Cut paper
-                    } > /dev/usb/lp0
-                    gum style --foreground="#00ff00" "✅ Printed edited ASCII art to thermal printer"
-                    break
-                fi
-            fi
-        elif [ -e /dev/usb/lp0 ]; then
-            if [ "$key" = "" ]; then  # Enter key
-                gum style --foreground="#00ccff" --bold "🖨️  Printing to thermal printer..."
-                {
-                    printf "${esc}t\x00"      # Select PC437 character table
-                    printf "${esc}M\x01"      # Switch to Font B
-                    printf "%s\n" "$art_output_pc437"
-                    printf "${esc}d\x$(printf '%02x' $lines)"  # Feed lines
-                    printf "${gs}VA\x00"     # Cut paper
-                } > /dev/usb/lp0
-                gum style --foreground="#00ff00" "✅ Printed to thermal printer"
-                break
-            elif [ "$key" = $'\e' ]; then  # ESC key
-                gum style --foreground="#ff9900" "🚫 Printing aborted"
-                break
-            else
-                gum style --foreground="#ff9900" "🚫 Invalid key - try again"
-            fi
-        else
-            gum style --foreground="#00ff00" "👋 Goodbye!"
-            break
-        fi
-    done
+    # Auto-print if printer is available, otherwise just exit
+    if [ -e /dev/usb/lp0 ]; then
+        gum style --foreground="#00ccff" --bold "🖨️  Printing to thermal printer..."
+        {
+            printf "${esc}t\x00"      # Select PC437 character table
+            printf "${esc}M\x01"      # Switch to Font B
+            printf "%s\n" "$art_output_pc437"
+            printf "${esc}d\x$(printf '%02x' $lines)"  # Feed lines
+            printf "${gs}VA\x00"     # Cut paper
+        } > /dev/usb/lp0
+        gum style --foreground="#00ff00" "✅ Printed to thermal printer"
+    fi
 fi
